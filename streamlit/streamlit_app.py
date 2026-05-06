@@ -105,11 +105,11 @@ elif page == "Vessel Tracking":
     c2.metric("At Sea", int((v["STATUS"] == "AT_SEA").sum()))
     c3.metric("Anchored / Waiting", int(v["STATUS"].isin(["ANCHORED", "WAITING"]).sum()))
 
-    geo = v.dropna(subset=["CURRENT_LAT", "CURRENT_LON"])
-    if not geo.empty:
-        fig = px.scatter_geo(geo, lat="CURRENT_LAT", lon="CURRENT_LON", color="STATUS", color_discrete_map=STATUS_COLORS, hover_name="VESSEL_NAME", size="CAPACITY_TEU", size_max=25, title="Live Vessel Positions")
-        fig.update_layout(height=450, margin=dict(t=40, b=10), geo=dict(showframe=False, showcoastlines=True, projection_type="natural earth", landcolor="#f5f5f5", oceancolor="#e8f4fd", showocean=True, showcountries=True, countrycolor="#dddddd"))
-        st.plotly_chart(fig, use_container_width=True)
+    sc = v["STATUS"].value_counts().reset_index()
+    sc.columns = ["STATUS", "COUNT"]
+    fig = px.bar(sc, x="STATUS", y="COUNT", color="STATUS", color_discrete_map=STATUS_COLORS, title="Vessels by Status", text_auto=True)
+    fig.update_layout(height=380, margin=dict(t=40, b=10), showlegend=False)
+    st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Top 20 Longest Waits")
     long_wait = v.dropna(subset=["WAIT_TIME_HOURS"]).sort_values("WAIT_TIME_HOURS", ascending=False).head(20)
