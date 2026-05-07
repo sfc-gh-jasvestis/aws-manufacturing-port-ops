@@ -2,6 +2,25 @@
 
 Real-time port operations intelligence powered by Snowflake Cortex AI — optimize berth allocation, reduce vessel wait times, and prevent terminal congestion.
 
+## AWS Hero — Real-time Terminal Twin
+
+Snowflake + **Kinesis Data Firehose** + **Snowpipe Streaming** + **AWS Lambda** + **Amazon Rekognition** + **QuickSight**. Every gate scan reaches Snowflake in under 5 seconds; gate-camera frames are read by Rekognition `DetectText` and joined to the event stream.
+
+```mermaid
+flowchart LR
+    Gate[Gate scanner] --> KIN[Kinesis Firehose mfg-portops-gate-events]
+    KIN --> SP[Snowpipe Streaming]
+    SP --> SF[Snowflake RAW.GATE_EVENTS]
+    Cam[Gate camera] --> S3[S3 gate-cam frames]
+    S3 --> LAM[Lambda mfg-portops-ocr]
+    LAM --> REK[Rekognition DetectText]
+    REK --> SF
+    SF --> DT[Dynamic Table GATE_EVENTS_5MIN]
+    DT --> ST[Streamlit]
+    DT --> QS[QuickSight + Amazon Q]
+```
+
+
 ## Architecture
 
 ```
