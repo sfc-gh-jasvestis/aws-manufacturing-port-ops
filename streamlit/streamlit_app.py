@@ -10,7 +10,7 @@ st.set_page_config(page_title="Port Operations Monitor", layout="wide", page_ico
 
 STATUS_COLORS = {"BERTHED": "#3498DB", "WAITING": "#F39C12", "DEPARTED": "#95A5A6", "SCHEDULED": "#2ECC71", "COMPLETED": "#27AE60", "AT_SEA": "#3498DB", "ANCHORED": "#F39C12"}
 
-page = st.sidebar.radio("Navigation", ["Overview", "Terminal Status", "Vessel Tracking", "Berth Schedule", "Ask Port Ops"], label_visibility="collapsed")
+page = st.sidebar.radio("Navigation", ["Overview", "Terminal Status", "Vessel Tracking", "Berth Schedule", "Real-time Gate Events (AWS Kinesis)", "Container OCR (AWS Rekognition)", "Ask Port Ops", "AWS Architecture"], label_visibility="collapsed")
 st.sidebar.divider()
 st.sidebar.markdown("### Port Operations")
 st.sidebar.caption("Terminal utilization, vessel tracking, and berth scheduling across 8 terminals")
@@ -137,6 +137,43 @@ elif page == "Berth Schedule":
     st.subheader("Berth Schedule Detail")
     st.dataframe(b[["VESSEL_NAME", "VESSEL_TYPE", "TERMINAL_NAME", "BERTH_NUMBER", "STATUS", "WAIT_TIME_HOURS", "CARGO_TYPE", "CONTAINER_COUNT"]].sort_values("STATUS"), use_container_width=True, hide_index=True)
 
+elif page == "Real-time Gate Events (AWS Kinesis)":
+    st.title("Real-time Gate Events")
+    st.caption("Kinesis Firehose -> Snowpipe Streaming -> Snowflake (5-min Dynamic Table)")
+    try:
+        recent = session.sql("SELECT EVENT_TS, GATE_ID, DIRECTION, CONTAINER_NUM, CARRIER_NAME, DWELL_SECONDS FROM MANUFACTURING_PORT_OPS.RAW.GATE_EVENTS ORDER BY EVENT_TS DESC LIMIT 50").to_pandas()
+        c1, c2, c3, c4 = st.columns(4)
+        total = session.sql("SELECT COUNT(*) FROM MANUFACTURING_PORT_OPS.RAW.GATE_EVENTS").to_pandas().iloc[0, 0]
+        last_min = session.sql("SELECT COUNT(*) FROM MANUFACTURING_PORT_OPS.RAW.GATE_EVENTS WHERE EVENT_TS > DATEADD('minute', -5, CURRENT_TIMESTAMP())").to_pandas().iloc[0, 0]
+        c1.metric("Total Events", f"{int(total):,}")
+        c2.metric("Last 5 min", int(last_min))
+        c3.metric("Source", "Kinesis Firehose")
+        c4.metric("Latency", "< 5 sec")
+        st.success("Firehose delivery stream `mfg-portops-gate-events` writes to Snowpipe Streaming endpoint; Dynamic Table `CURATED.GATE_EVENTS_5MIN` aggregates every minute.")
+        bucket = session.sql("SELECT TO_VARCHAR(BUCKET_TS, 'HH24:MI') AS T, SUM(EVENT_COUNT) AS EVENTS FROM MANUFACTURING_PORT_OPS.CURATED.GATE_EVENTS_5MIN WHERE BUCKET_TS > DATEADD('hour', -1, CURRENT_TIMESTAMP()) GROUP BY 1 ORDER BY 1").to_pandas()
+        if not bucket.empty:
+            fig = px.bar(bucket, x="T", y="EVENTS", title="Gate events per minute (last hour)")
+            fig.update_layout(height=320, margin=dict(t=40, b=10))
+            st.plotly_chart(fig, use_container_width=True)
+        st.subheader("50 most recent events")
+        st.dataframe(recent, use_container_width=True)
+    except Exception as e:
+        st.error(f"Stream error: {e}")
+
+elif page == "Container OCR (AWS Rekognition)":
+    st.title("Container OCR via AWS Rekognition")
+    st.caption("Gate cameras -> S3 -> Lambda -> Rekognition DetectText -> Snowflake")
+    try:
+        ocr = session.sql("SELECT OCR_TS, GATE_ID, S3_KEY, DETECTED_TEXT, CONFIDENCE_PCT FROM MANUFACTURING_PORT_OPS.RAW.OCR_RESULTS ORDER BY OCR_TS DESC LIMIT 30").to_pandas()
+        c1, c2, c3 = st.columns(3)
+        c1.metric("OCR Records", len(ocr))
+        c2.metric("Avg Confidence", f"{ocr['CONFIDENCE_PCT'].astype(float).mean():.1f}%")
+        c3.metric("Lambda", "mfg-portops-ocr")
+        st.info("Lambda `mfg-portops-ocr` reads each gate-cam frame from `s3://sg-manufacturing-demos-2026/port-ops/gate-cam/`, calls Rekognition `DetectText`, and writes the result to `RAW.OCR_RESULTS`.")
+        st.dataframe(ocr, use_container_width=True)
+    except Exception as e:
+        st.error(f"OCR error: {e}")
+
 elif page == "Ask Port Ops":
     st.title("Ask the Data")
     st.caption("Natural language questions powered by Cortex Analyst")
@@ -165,3 +202,30 @@ elif page == "Ask Port Ops":
                     st.error(parsed)
             except Exception as e:
                 st.error(f"Error: {e}")
+
+elif page == "AWS Architecture":
+    st.title("AWS Architecture - Real-time Terminal Twin")
+    st.caption("Snowflake + Kinesis Firehose + Snowpipe Streaming + Rekognition + QuickSight")
+    a, b, c, d = st.columns(4)
+    a.metric("AWS Hero", "Kinesis Firehose")
+    b.metric("Stream", "mfg-portops-gate-events")
+    c.metric("Vision", "Rekognition")
+    d.metric("Latency", "< 5 sec")
+    st.markdown(
+        """
+**Data flow**
+
+1. **Gate scanners** publish JSON event records to **Kinesis Data Firehose** delivery stream `mfg-portops-gate-events`.
+2. Firehose forwards every record to a **Snowpipe Streaming** endpoint -> rows land in `RAW.GATE_EVENTS` with sub-5-second latency.
+3. **Gate cameras** drop frames into `s3://sg-manufacturing-demos-2026/port-ops/gate-cam/`. **AWS Lambda** `mfg-portops-ocr` triggers on `s3:ObjectCreated`, calls **Rekognition `DetectText`**, and writes the container number to `RAW.OCR_RESULTS`.
+4. A **Dynamic Table** `CURATED.GATE_EVENTS_5MIN` aggregates throughput per gate every minute.
+5. **QuickSight** dashboard `mfg-port-ops-dashboard` and **Amazon Q topic** `mfg-port-ops-q` answer "How many trucks have come through gate 3 in the last 10 minutes?" off the same Snowflake data.
+
+**ARNs**
+
+- `arn:aws:kinesis:us-west-2:018437500440:deliverystream/mfg-portops-gate-events`
+- `arn:aws:s3:::sg-manufacturing-demos-2026/port-ops/gate-cam/`
+- `arn:aws:lambda:us-west-2:018437500440:function:mfg-portops-ocr`
+- `arn:aws:rekognition:us-west-2::foundation-model/text-detection`
+        """
+    )
