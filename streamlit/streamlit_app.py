@@ -23,7 +23,7 @@ st.set_page_config(page_title="Port Operations Monitor", layout="wide", page_ico
 
 STATUS_COLORS = {"BERTHED": "#3498DB", "WAITING": "#F39C12", "DEPARTED": "#95A5A6", "SCHEDULED": "#2ECC71", "COMPLETED": "#27AE60", "AT_SEA": "#3498DB", "ANCHORED": "#F39C12"}
 
-page = st.sidebar.radio("Navigation", ["Overview", "Terminal Status", "Vessel Tracking", "Berth Schedule", "Real-time Gate Events (AWS Kinesis)", "Container OCR (AWS Rekognition)", "Ask Port Ops", "AWS Architecture"], label_visibility="collapsed")
+page = st.sidebar.radio("Navigation", ["Overview", "Terminal Status", "Vessel Tracking", "Berth Schedule", "Real-time Gate Events (AWS Kinesis)", "Container OCR (AWS Rekognition)", "Ask Port Ops"], label_visibility="collapsed")
 st.sidebar.divider()
 st.sidebar.markdown("### Port Operations")
 st.sidebar.caption("Terminal utilization, vessel tracking, and berth scheduling across 8 terminals")
@@ -107,7 +107,7 @@ elif page == "Terminal Status":
 
     st.subheader("Terminal Details")
     show = term[["TERMINAL_NAME", "OPERATOR", "BERTHS", "VESSELS_BERTHED", "FREE_BERTHS", "QUEUE_DEPTH", "UTILIZATION_PCT", "AVG_WAIT_HOURS", "CRANE_COUNT", "MAX_TEU_PER_DAY"]]
-    st.dataframe(show, use_container_width=True, hide_index=True)
+    st.dataframe(show, use_container_width=True)
 
 elif page == "Vessel Tracking":
     st.title("Vessel Tracking")
@@ -137,7 +137,7 @@ elif page == "Vessel Tracking":
 
     st.subheader("Top 20 Longest Waits")
     long_wait = v.dropna(subset=["WAIT_TIME_HOURS"]).sort_values("WAIT_TIME_HOURS", ascending=False).head(20)
-    st.dataframe(long_wait[["VESSEL_NAME", "VESSEL_TYPE", "STATUS", "ASSIGNED_TERMINAL", "WAIT_TIME_HOURS", "CAPACITY_TEU", "SPEED_KNOTS"]], use_container_width=True, hide_index=True)
+    st.dataframe(long_wait[["VESSEL_NAME", "VESSEL_TYPE", "STATUS", "ASSIGNED_TERMINAL", "WAIT_TIME_HOURS", "CAPACITY_TEU", "SPEED_KNOTS"]], use_container_width=True)
 
 elif page == "Berth Schedule":
     st.title("Berth Schedule")
@@ -167,7 +167,7 @@ elif page == "Berth Schedule":
         st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Berth Schedule Detail")
-    st.dataframe(b[["VESSEL_NAME", "VESSEL_TYPE", "TERMINAL_NAME", "BERTH_NUMBER", "STATUS", "WAIT_TIME_HOURS", "CARGO_TYPE", "CONTAINER_COUNT"]].sort_values("STATUS"), use_container_width=True, hide_index=True)
+    st.dataframe(b[["VESSEL_NAME", "VESSEL_TYPE", "TERMINAL_NAME", "BERTH_NUMBER", "STATUS", "WAIT_TIME_HOURS", "CARGO_TYPE", "CONTAINER_COUNT"]].sort_values("STATUS"), use_container_width=True)
 
 elif page == "Real-time Gate Events (AWS Kinesis)":
     st.title("Real-time Gate Events")
@@ -229,7 +229,7 @@ elif page == "Ask Port Ops":
                             with st.expander("SQL"):
                                 st.code(sql, language="sql")
                             try:
-                                st.dataframe(session.sql(sql).to_pandas(), use_container_width=True, hide_index=True)
+                                st.dataframe(session.sql(sql).to_pandas(), use_container_width=True)
                             except Exception:
                                 pass
                 else:
@@ -237,29 +237,3 @@ elif page == "Ask Port Ops":
             except Exception as e:
                 st.error(f"Error: {e}")
 
-elif page == "AWS Architecture":
-    st.title("AWS Architecture - Real-time Terminal Twin")
-    st.caption("Snowflake + Kinesis Firehose + Snowpipe Streaming + Rekognition + QuickSight")
-    a, b, c, d = st.columns(4)
-    a.metric("AWS Hero", "Kinesis Firehose")
-    b.metric("Stream", "mfg-portops-gate-events")
-    c.metric("Vision", "Rekognition")
-    d.metric("Latency", "< 5 sec")
-    st.markdown(
-        """
-**Data flow**
-
-1. **Gate scanners** publish JSON event records to **Kinesis Data Firehose** delivery stream `mfg-portops-gate-events`.
-2. Firehose forwards every record to a **Snowpipe Streaming** endpoint -> rows land in `RAW.GATE_EVENTS` with sub-5-second latency.
-3. **Gate cameras** drop frames into `s3://sg-manufacturing-demos-2026/port-ops/gate-cam/`. **AWS Lambda** `mfg-portops-ocr` triggers on `s3:ObjectCreated`, calls **Rekognition `DetectText`**, and writes the container number to `RAW.OCR_RESULTS`.
-4. A **Dynamic Table** `CURATED.GATE_EVENTS_5MIN` aggregates throughput per gate every minute.
-5. **QuickSight** dashboard `mfg-port-ops-dashboard` and **Amazon Q topic** `mfg-port-ops-q` answer "How many trucks have come through gate 3 in the last 10 minutes?" off the same Snowflake data.
-
-**ARNs**
-
-- `arn:aws:kinesis:us-west-2:018437500440:deliverystream/mfg-portops-gate-events`
-- `arn:aws:s3:::sg-manufacturing-demos-2026/port-ops/gate-cam/`
-- `arn:aws:lambda:us-west-2:018437500440:function:mfg-portops-ocr`
-- `arn:aws:rekognition:us-west-2::foundation-model/text-detection`
-        """
-    )
