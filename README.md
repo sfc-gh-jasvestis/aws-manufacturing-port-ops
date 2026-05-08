@@ -76,3 +76,4 @@ MANUFACTURING_PORT_OPS.APP.PORT_OPERATIONS_APP
 ## License
 
 Apache 2.0 — See [LICENSE](LICENSE) for details.
+This is a personal project and is not an official Snowflake offering. It comes with no support or warranty. Use it at your own risk. Snowflake has no obligation to maintain, update, or support this code. Do not use this code in production without thorough review and testing.
