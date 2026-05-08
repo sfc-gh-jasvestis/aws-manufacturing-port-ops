@@ -2,9 +2,9 @@
 
 Real-time port operations intelligence powered by Snowflake Cortex AI — optimize berth allocation, reduce vessel wait times, and prevent terminal congestion.
 
-## AWS Hero — Real-time Terminal Twin
+## Architecture
 
-Snowflake + **Kinesis Data Firehose** + **Snowpipe Streaming** + **AWS Lambda** + **Amazon Rekognition** + **QuickSight**. Every gate scan reaches Snowflake in under 5 seconds; gate-camera frames are read by Rekognition `DetectText` and joined to the event stream.
+A real-time terminal twin built on **Snowflake** (Snowpipe Streaming, Dynamic Tables, semantic view, Cortex Analyst) and **AWS** (Kinesis Data Firehose, S3, Lambda, Rekognition, QuickSight + Amazon Q). Every gate scan reaches Snowflake in under 5 seconds; gate-camera frames are read by Rekognition `DetectText` and joined to the event stream.
 
 ```mermaid
 flowchart LR
@@ -16,25 +16,11 @@ flowchart LR
     LAM --> REK[Rekognition DetectText]
     REK --> SF
     SF --> DT[Dynamic Table GATE_EVENTS_5MIN]
-    DT --> ST[Streamlit]
+    DT --> SemView[Semantic View]
+    DT --> ST[Streamlit Port Ops App]
     DT --> QS[QuickSight + Amazon Q]
 ```
 
-
-## Architecture
-
-```
-┌─────────┐    ┌───────────────────────────────────────────────────────┐    ┌─────────────┐
-│  AWS S3 │───▶│                   SNOWFLAKE                           │───▶│  Streamlit  │
-│  (Raw)  │    │  Stages → Dynamic Tables → ML Models → Cortex Agent  │    │  Dashboard  │
-└─────────┘    └───────────────────────────────────────────────────────┘    └─────────────┘
-                         │                        │
-                         ▼                        ▼
-                  ┌─────────────┐         ┌─────────────┐
-                  │  Semantic   │         │   Cortex    │
-                  │    View     │         │   Search    │
-                  └─────────────┘         └─────────────┘
-```
 
 ## Personas
 
