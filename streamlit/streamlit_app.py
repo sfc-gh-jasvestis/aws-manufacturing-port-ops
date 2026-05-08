@@ -6,6 +6,18 @@ import _snowflake
 from snowflake.snowpark.context import get_active_session
 
 session = get_active_session()
+
+def coerce_numeric(df, cols=None):
+    """Force Decimal/object cols to float64 so plotly renders them numerically (not as categorical)."""
+    if df is None or len(df) == 0:
+        return df
+    target = cols or [c for c in df.columns if df[c].dtype == "object"]
+    for c in target:
+        try:
+            df[c] = pd.Series([float(x) if x is not None else None for x in df[c]], index=df.index, dtype="float64")
+        except (TypeError, ValueError):
+            pass
+    return df
 st.set_page_config(page_title="Port Operations Monitor", layout="wide", page_icon="anchor")
 
 STATUS_COLORS = {"BERTHED": "#3498DB", "WAITING": "#F39C12", "DEPARTED": "#95A5A6", "SCHEDULED": "#2ECC71", "COMPLETED": "#27AE60", "AT_SEA": "#3498DB", "ANCHORED": "#F39C12"}
@@ -18,7 +30,7 @@ st.sidebar.caption("Terminal utilization, vessel tracking, and berth scheduling 
 
 @st.cache_data(ttl=60)
 def load_terminals():
-    df = session.sql("SELECT * FROM MANUFACTURING_PORT_OPS.CURATED.TERMINAL_STATUS ORDER BY UTILIZATION_PCT DESC").to_pandas()
+    df = coerce_numeric(session.sql("SELECT * FROM MANUFACTURING_PORT_OPS.CURATED.TERMINAL_STATUS ORDER BY UTILIZATION_PCT DESC").to_pandas())
     for c in ["BERTHS", "CRANE_COUNT", "MAX_TEU_PER_DAY", "QUEUE_DEPTH", "VESSELS_BERTHED", "FREE_BERTHS", "UTILIZATION_PCT", "AVG_WAIT_HOURS"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
@@ -26,7 +38,7 @@ def load_terminals():
 
 @st.cache_data(ttl=60)
 def load_vessels():
-    df = session.sql("SELECT * FROM MANUFACTURING_PORT_OPS.CURATED.VESSEL_TRACKING").to_pandas()
+    df = coerce_numeric(session.sql("SELECT * FROM MANUFACTURING_PORT_OPS.CURATED.VESSEL_TRACKING").to_pandas())
     for c in ["CURRENT_LAT", "CURRENT_LON", "SPEED_KNOTS", "CAPACITY_TEU", "WAIT_TIME_HOURS"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
@@ -34,7 +46,7 @@ def load_vessels():
 
 @st.cache_data(ttl=60)
 def load_berths():
-    df = session.sql("SELECT * FROM MANUFACTURING_PORT_OPS.CURATED.BERTH_SCHEDULE").to_pandas()
+    df = coerce_numeric(session.sql("SELECT * FROM MANUFACTURING_PORT_OPS.CURATED.BERTH_SCHEDULE").to_pandas())
     for c in ["WAIT_TIME_HOURS", "CAPACITY_TEU", "CONTAINER_COUNT"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
@@ -150,7 +162,7 @@ elif page == "Real-time Gate Events (AWS Kinesis)":
         c3.metric("Source", "Kinesis Firehose")
         c4.metric("Latency", "< 5 sec")
         st.success("Firehose delivery stream `mfg-portops-gate-events` writes to Snowpipe Streaming endpoint; Dynamic Table `CURATED.GATE_EVENTS_5MIN` aggregates every minute.")
-        bucket = session.sql("SELECT TO_VARCHAR(BUCKET_TS, 'HH24:MI') AS T, SUM(EVENT_COUNT) AS EVENTS FROM MANUFACTURING_PORT_OPS.CURATED.GATE_EVENTS_5MIN WHERE BUCKET_TS > DATEADD('hour', -1, CURRENT_TIMESTAMP()) GROUP BY 1 ORDER BY 1").to_pandas()
+        bucket = coerce_numeric(session.sql("SELECT TO_VARCHAR(BUCKET_TS, 'HH24:MI') AS T, SUM(EVENT_COUNT) AS EVENTS FROM MANUFACTURING_PORT_OPS.CURATED.GATE_EVENTS_5MIN WHERE BUCKET_TS > DATEADD('hour', -1, CURRENT_TIMESTAMP()) GROUP BY 1 ORDER BY 1").to_pandas())
         if not bucket.empty:
             fig = px.bar(bucket, x="T", y="EVENTS", title="Gate events per minute (last hour)")
             fig.update_layout(height=320, margin=dict(t=40, b=10))
