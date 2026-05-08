@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import plotly.express as px
+import plotly.graph_objects as go
 import _snowflake
 from snowflake.snowpark.context import get_active_session
 
@@ -74,15 +75,20 @@ if page == "Overview":
     st.divider()
     cc1, cc2 = st.columns(2)
     with cc1:
-        fig = px.bar(term.sort_values("UTILIZATION_PCT"), x="UTILIZATION_PCT", y="TERMINAL_NAME", orientation="h", color="UTILIZATION_PCT", color_continuous_scale="RdYlGn_r", range_color=[0, 100], title="Terminal Utilization %")
+        tu = term.sort_values("UTILIZATION_PCT")
+        x_vals = [float(v) for v in tu["UTILIZATION_PCT"].tolist()]
+        y_vals = [str(v) for v in tu["TERMINAL_NAME"].tolist()]
+        fig = go.Figure(data=[go.Bar(x=x_vals, y=y_vals, orientation="h", marker=dict(color=x_vals, colorscale="RdYlGn_r", cmin=0, cmax=100), hovertemplate="<b>%{y}</b><br>Utilization: %{x:.1f}%<extra></extra>")])
         fig.add_vline(x=90, line_dash="dash", line_color="red", annotation_text="Critical 90%")
-        fig.update_layout(height=380, margin=dict(t=40, b=10), coloraxis_showscale=False)
+        fig.update_layout(title="Terminal Utilization %", height=380, margin=dict(t=40, b=10), xaxis_title="Utilization %", yaxis_title="")
         st.plotly_chart(fig, use_container_width=True)
     with cc2:
         twait = term.dropna(subset=["AVG_WAIT_HOURS"]).sort_values("AVG_WAIT_HOURS")
-        fig = px.bar(twait, x="AVG_WAIT_HOURS", y="TERMINAL_NAME", orientation="h", color="AVG_WAIT_HOURS", color_continuous_scale="OrRd", title="Avg Wait Hours")
+        x_vals = [float(v) for v in twait["AVG_WAIT_HOURS"].tolist()]
+        y_vals = [str(v) for v in twait["TERMINAL_NAME"].tolist()]
+        fig = go.Figure(data=[go.Bar(x=x_vals, y=y_vals, orientation="h", marker=dict(color=x_vals, colorscale="OrRd"), hovertemplate="<b>%{y}</b><br>Wait: %{x:.1f}h<extra></extra>")])
         fig.add_vline(x=4, line_dash="dash", line_color="red", annotation_text="Target 4h")
-        fig.update_layout(height=380, margin=dict(t=40, b=10), coloraxis_showscale=False)
+        fig.update_layout(title="Avg Wait Hours", height=380, margin=dict(t=40, b=10), xaxis_title="Hours", yaxis_title="")
         st.plotly_chart(fig, use_container_width=True)
 
 elif page == "Terminal Status":
@@ -90,10 +96,13 @@ elif page == "Terminal Status":
     st.caption("Per-terminal capacity, queues, and dwell")
     term = load_terminals()
 
-    fig = px.bar(term.sort_values("UTILIZATION_PCT"), x="TERMINAL_NAME", y="UTILIZATION_PCT", color="UTILIZATION_PCT", color_continuous_scale="RdYlGn_r", range_color=[0, 100], title="Utilization % per Terminal", text_auto=".0f")
+    tu2 = term.sort_values("UTILIZATION_PCT")
+    x_vals = [str(v) for v in tu2["TERMINAL_NAME"].tolist()]
+    y_vals = [float(v) for v in tu2["UTILIZATION_PCT"].tolist()]
+    fig = go.Figure(data=[go.Bar(x=x_vals, y=y_vals, marker=dict(color=y_vals, colorscale="RdYlGn_r", cmin=0, cmax=100), text=[f"{v:.0f}" for v in y_vals], textposition="auto", hovertemplate="<b>%{x}</b><br>Utilization: %{y:.1f}%<extra></extra>")])
     fig.add_hline(y=90, line_dash="dash", line_color="red", annotation_text="Critical 90%")
     fig.add_hline(y=80, line_dash="dash", line_color="orange", annotation_text="High 80%")
-    fig.update_layout(height=400, margin=dict(t=40, b=10))
+    fig.update_layout(title="Utilization % per Terminal", height=400, margin=dict(t=40, b=10), yaxis_title="Utilization %", xaxis_title="")
     st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Terminal Details")
@@ -119,8 +128,11 @@ elif page == "Vessel Tracking":
 
     sc = v["STATUS"].value_counts().reset_index()
     sc.columns = ["STATUS", "COUNT"]
-    fig = px.bar(sc, x="STATUS", y="COUNT", color="STATUS", color_discrete_map=STATUS_COLORS, title="Vessels by Status", text_auto=True)
-    fig.update_layout(height=380, margin=dict(t=40, b=10), showlegend=False)
+    x_vals = [str(v) for v in sc["STATUS"].tolist()]
+    y_vals = [int(v) for v in sc["COUNT"].tolist()]
+    bar_colors = [STATUS_COLORS.get(s, "#888") for s in x_vals]
+    fig = go.Figure(data=[go.Bar(x=x_vals, y=y_vals, marker_color=bar_colors, text=y_vals, textposition="auto", hovertemplate="<b>%{x}</b><br>Count: %{y}<extra></extra>")])
+    fig.update_layout(title="Vessels by Status", height=380, margin=dict(t=40, b=10), showlegend=False, yaxis_title="Count", xaxis_title="")
     st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Top 20 Longest Waits")
@@ -141,9 +153,17 @@ elif page == "Berth Schedule":
     c3.metric("Avg Wait (Waiting)", f"{waiting['WAIT_TIME_HOURS'].mean():.1f}h" if not waiting.empty else "0h")
 
     if not waiting.empty:
-        fig = px.bar(waiting.head(15).sort_values("WAIT_TIME_HOURS"), x="WAIT_TIME_HOURS", y="VESSEL_NAME", orientation="h", color="TERMINAL_NAME", title="Top Waiting Vessels")
+        wsel = waiting.head(15).sort_values("WAIT_TIME_HOURS")
+        x_vals = [float(v) for v in wsel["WAIT_TIME_HOURS"].tolist()]
+        y_vals = [str(v) for v in wsel["VESSEL_NAME"].tolist()]
+        terms = [str(v) for v in wsel["TERMINAL_NAME"].tolist()]
+        unique_terms = list(dict.fromkeys(terms))
+        palette = ["#3498DB", "#E74C3C", "#2ECC71", "#F39C12", "#9B59B6", "#1ABC9C", "#E67E22", "#34495E"]
+        cmap = {t: palette[i % len(palette)] for i, t in enumerate(unique_terms)}
+        bar_colors = [cmap[t] for t in terms]
+        fig = go.Figure(data=[go.Bar(x=x_vals, y=y_vals, orientation="h", marker_color=bar_colors, customdata=terms, hovertemplate="<b>%{y}</b><br>Wait: %{x:.1f}h<br>Terminal: %{customdata}<extra></extra>")])
         fig.add_vline(x=4, line_dash="dash", line_color="red", annotation_text="Target 4h")
-        fig.update_layout(height=400, margin=dict(t=40, b=10, l=180))
+        fig.update_layout(title="Top Waiting Vessels", height=400, margin=dict(t=40, b=10, l=180), xaxis_title="Wait Hours", yaxis_title="")
         st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Berth Schedule Detail")
@@ -164,8 +184,10 @@ elif page == "Real-time Gate Events (AWS Kinesis)":
         st.success("Firehose delivery stream `mfg-portops-gate-events` writes to Snowpipe Streaming endpoint; Dynamic Table `CURATED.GATE_EVENTS_5MIN` aggregates every minute.")
         bucket = coerce_numeric(session.sql("SELECT TO_VARCHAR(BUCKET_TS, 'HH24:MI') AS T, SUM(EVENT_COUNT) AS EVENTS FROM MANUFACTURING_PORT_OPS.CURATED.GATE_EVENTS_5MIN WHERE BUCKET_TS > DATEADD('hour', -1, CURRENT_TIMESTAMP()) GROUP BY 1 ORDER BY 1").to_pandas())
         if not bucket.empty:
-            fig = px.bar(bucket, x="T", y="EVENTS", title="Gate events per minute (last hour)")
-            fig.update_layout(height=320, margin=dict(t=40, b=10))
+            x_vals = [str(v) for v in bucket["T"].tolist()]
+            y_vals = [float(v) for v in bucket["EVENTS"].tolist()]
+            fig = go.Figure(data=[go.Bar(x=x_vals, y=y_vals, marker_color="#3498DB", hovertemplate="<b>%{x}</b><br>Events: %{y}<extra></extra>")])
+            fig.update_layout(title="Gate events per minute (last hour)", height=320, margin=dict(t=40, b=10), yaxis_title="Events", xaxis_title="Time")
             st.plotly_chart(fig, use_container_width=True)
         st.subheader("50 most recent events")
         st.dataframe(recent, use_container_width=True)
