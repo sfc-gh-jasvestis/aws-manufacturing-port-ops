@@ -107,7 +107,7 @@ elif page == "Terminal Status":
 
     st.subheader("Terminal Details")
     show = term[["TERMINAL_NAME", "OPERATOR", "BERTHS", "VESSELS_BERTHED", "FREE_BERTHS", "QUEUE_DEPTH", "UTILIZATION_PCT", "AVG_WAIT_HOURS", "CRANE_COUNT", "MAX_TEU_PER_DAY"]]
-    st.dataframe(show, use_container_width=True)
+    st.dataframe(show.reset_index(drop=True), use_container_width=True)
 
 elif page == "Vessel Tracking":
     st.title("Vessel Tracking")
@@ -137,7 +137,7 @@ elif page == "Vessel Tracking":
 
     st.subheader("Top 20 Longest Waits")
     long_wait = v.dropna(subset=["WAIT_TIME_HOURS"]).sort_values("WAIT_TIME_HOURS", ascending=False).head(20)
-    st.dataframe(long_wait[["VESSEL_NAME", "VESSEL_TYPE", "STATUS", "ASSIGNED_TERMINAL", "WAIT_TIME_HOURS", "CAPACITY_TEU", "SPEED_KNOTS"]], use_container_width=True)
+    st.dataframe(long_wait[["VESSEL_NAME", "VESSEL_TYPE", "STATUS", "ASSIGNED_TERMINAL", "WAIT_TIME_HOURS", "CAPACITY_TEU", "SPEED_KNOTS"]].reset_index(drop=True), use_container_width=True)
 
 elif page == "Berth Schedule":
     st.title("Berth Schedule")
@@ -167,7 +167,7 @@ elif page == "Berth Schedule":
         st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Berth Schedule Detail")
-    st.dataframe(b[["VESSEL_NAME", "VESSEL_TYPE", "TERMINAL_NAME", "BERTH_NUMBER", "STATUS", "WAIT_TIME_HOURS", "CARGO_TYPE", "CONTAINER_COUNT"]].sort_values("STATUS"), use_container_width=True)
+    st.dataframe(b[["VESSEL_NAME", "VESSEL_TYPE", "TERMINAL_NAME", "BERTH_NUMBER", "STATUS", "WAIT_TIME_HOURS", "CARGO_TYPE", "CONTAINER_COUNT"]].sort_values("STATUS").reset_index(drop=True), use_container_width=True)
 
 elif page == "Real-time Gate Events (AWS Kinesis)":
     st.title("Real-time Gate Events")
@@ -190,7 +190,7 @@ elif page == "Real-time Gate Events (AWS Kinesis)":
             fig.update_layout(title="Gate events per minute (last hour)", height=320, margin=dict(t=40, b=10), yaxis_title="Events", xaxis_title="Time")
             st.plotly_chart(fig, use_container_width=True)
         st.subheader("50 most recent events")
-        st.dataframe(recent, use_container_width=True)
+        st.dataframe(recent.reset_index(drop=True), use_container_width=True)
     except Exception as e:
         st.error(f"Stream error: {e}")
 
@@ -204,7 +204,7 @@ elif page == "Container OCR (AWS Rekognition)":
         c2.metric("Avg Confidence", f"{ocr['CONFIDENCE_PCT'].astype(float).mean():.1f}%")
         c3.metric("Lambda", "mfg-portops-ocr")
         st.info("Lambda `mfg-portops-ocr` reads each gate-cam frame from `s3://sg-manufacturing-demos-2026/port-ops/gate-cam/`, calls Rekognition `DetectText`, and writes the result to `RAW.OCR_RESULTS`.")
-        st.dataframe(ocr, use_container_width=True)
+        st.dataframe(ocr.reset_index(drop=True), use_container_width=True)
     except Exception as e:
         st.error(f"OCR error: {e}")
 
@@ -229,7 +229,7 @@ elif page == "Ask Port Ops":
                             with st.expander("SQL"):
                                 st.code(sql, language="sql")
                             try:
-                                st.dataframe(session.sql(sql).to_pandas(), use_container_width=True)
+                                st.dataframe(session.sql(sql).to_pandas().reset_index(drop=True), use_container_width=True)
                             except Exception:
                                 pass
                 else:
