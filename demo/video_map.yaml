@@ -1,0 +1,45 @@
+source_video: ~/movies/AWS MFG Port Operations.mp4
+source_type: generated
+resolution: [1920, 1080]
+fps: 30
+
+title_card:
+  title: "Port Operations Intelligence"
+  subtitle: "AWS + Snowflake"
+  duration: 3.0
+
+scenes:
+  - id: "scene_01_the_problem_architecture"
+    label: "Problem & Architecture"
+    start: 3.0
+    end: 26.3
+
+  - id: "scene_02_page_1_terminal_status_vessel_queue"
+    label: "Terminal Status"
+    start: 26.3
+    end: 53.1
+
+  - id: "scene_03_page_2_real_time_gate_events_kinesis_snowpipe_streaming"
+    label: "Gate Events (Kinesis)"
+    start: 53.1
+    end: 97.4
+
+  - id: "scene_04_page_3_container_ocr_rekognition"
+    label: "Container OCR"
+    start: 97.4
+    end: 119.6
+
+  - id: "scene_05_page_4_ask_port_ops"
+    label: "Ask Port Ops"
+    start: 119.6
+    end: 129.4
+
+  - id: "scene_06_quicksight_amazon_q_the_manager_view"
+    label: "QuickSight"
+    start: 129.4
+    end: 148.8
+
+  - id: "scene_07_close"
+    label: "Close"
+    start: 148.8
+    end: 166.8

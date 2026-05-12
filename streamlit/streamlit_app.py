@@ -61,9 +61,12 @@ if page == "Overview":
     vessels = load_vessels()
 
     bottleneck = term.iloc[0]
-    waiting_pacific = berth[(berth["VESSEL_NAME"].str.contains("Pacific Star", na=False))]
-    star_wait = waiting_pacific["WAIT_TIME_HOURS"].max() if not waiting_pacific.empty else 0
-    st.error(f"INCIDENT: {bottleneck['TERMINAL_NAME']} at {bottleneck['UTILIZATION_PCT']:.0f}% utilization, queue {int(bottleneck['QUEUE_DEPTH'])}, {bottleneck['AVG_WAIT_HOURS']:.1f}h wait (target 4h) - MV Pacific Star waiting {star_wait:.0f}h")
+    anchored = vessels[vessels["STATUS"] == "ANCHORED"].nlargest(1, "WAIT_TIME_HOURS") if "STATUS" in vessels.columns else pd.DataFrame()
+    if not anchored.empty:
+        hero_vessel = anchored.iloc[0]
+        st.error(f"INCIDENT: {bottleneck['TERMINAL_NAME']} at {bottleneck['UTILIZATION_PCT']:.0f}% utilization, queue {int(bottleneck['QUEUE_DEPTH'])}, {bottleneck['AVG_WAIT_HOURS']:.1f}h wait (target 4h) - {hero_vessel['VESSEL_NAME']} waiting {hero_vessel['WAIT_TIME_HOURS']:.0f}h")
+    else:
+        st.error(f"INCIDENT: {bottleneck['TERMINAL_NAME']} at {bottleneck['UTILIZATION_PCT']:.0f}% utilization, queue {int(bottleneck['QUEUE_DEPTH'])}, {bottleneck['AVG_WAIT_HOURS']:.1f}h wait (target 4h)")
 
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Terminals", len(term))
@@ -71,6 +74,13 @@ if page == "Overview":
     c3.metric("Vessels Berthed", int(term["VESSELS_BERTHED"].sum()))
     c4.metric("Avg Utilization", f"{term['UTILIZATION_PCT'].mean():.1f}%")
     c5.metric("Max Wait", f"{term['AVG_WAIT_HOURS'].max():.1f}h", delta=f"{term['AVG_WAIT_HOURS'].max()-4:+.1f}h vs target", delta_color="inverse")
+
+    if not anchored.empty:
+        hw = anchored.iloc[0]
+        d1, d2, d3 = st.columns(3)
+        d1.metric("Longest Wait Vessel", hw["VESSEL_NAME"])
+        d2.metric("Wait Time", f"{hw['WAIT_TIME_HOURS']:.0f}h")
+        d3.metric("Est. Demurrage", f"${hw['WAIT_TIME_HOURS'] * 12000:,.0f}")
 
     st.divider()
     cc1, cc2 = st.columns(2)
@@ -116,15 +126,19 @@ elif page == "Vessel Tracking":
     if v.empty:
         st.info("No vessels."); st.stop()
 
-    pacific = v[v["VESSEL_NAME"].str.contains("Pacific Star", na=False)]
-    if not pacific.empty:
-        ps = pacific.iloc[0]
-        st.warning(f"MV Pacific Star: {ps['STATUS']} - waiting {ps['WAIT_TIME_HOURS']:.0f}h on {ps.get('ASSIGNED_TERMINAL', 'Terminal 3')}")
+    longest_wait = v[v["STATUS"] == "ANCHORED"].nlargest(1, "WAIT_TIME_HOURS")
+    if not longest_wait.empty:
+        ps = longest_wait.iloc[0]
+        st.warning(f"{ps['VESSEL_NAME']}: {ps['STATUS']} - waiting {ps['WAIT_TIME_HOURS']:.0f}h on {ps.get('ASSIGNED_TERMINAL', 'Terminal 3')}")
 
-    c1, c2, c3 = st.columns(3)
+    anchored = v[v["STATUS"].isin(["ANCHORED", "WAITING"])]
+    total_demurrage = anchored["WAIT_TIME_HOURS"].sum() * 12000
+
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Vessels", len(v))
     c2.metric("At Sea", int((v["STATUS"] == "AT_SEA").sum()))
-    c3.metric("Anchored / Waiting", int(v["STATUS"].isin(["ANCHORED", "WAITING"]).sum()))
+    c3.metric("Anchored / Waiting", int(len(anchored)))
+    c4.metric("Total Demurrage", f"${total_demurrage:,.0f}")
 
     sc = v["STATUS"].value_counts().reset_index()
     sc.columns = ["STATUS", "COUNT"]
@@ -136,8 +150,10 @@ elif page == "Vessel Tracking":
     st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Top 20 Longest Waits")
-    long_wait = v.dropna(subset=["WAIT_TIME_HOURS"]).sort_values("WAIT_TIME_HOURS", ascending=False).head(20)
-    st.dataframe(long_wait[["VESSEL_NAME", "VESSEL_TYPE", "STATUS", "ASSIGNED_TERMINAL", "WAIT_TIME_HOURS", "CAPACITY_TEU", "SPEED_KNOTS"]].reset_index(drop=True), use_container_width=True)
+    long_wait = v.dropna(subset=["WAIT_TIME_HOURS"]).sort_values("WAIT_TIME_HOURS", ascending=False).head(20).copy()
+    long_wait["EST_DEMURRAGE"] = long_wait["WAIT_TIME_HOURS"] * 12000
+    display_cols = ["VESSEL_NAME", "VESSEL_TYPE", "STATUS", "ASSIGNED_TERMINAL", "WAIT_TIME_HOURS", "EST_DEMURRAGE", "CAPACITY_TEU", "SPEED_KNOTS"]
+    st.dataframe(long_wait[display_cols].style.format({"EST_DEMURRAGE": "${:,.0f}", "WAIT_TIME_HOURS": "{:.1f}"}), use_container_width=True)
 
 elif page == "Berth Schedule":
     st.title("Berth Schedule")
@@ -204,6 +220,30 @@ elif page == "Container OCR (AWS Rekognition)":
         c2.metric("Avg Confidence", f"{ocr['CONFIDENCE_PCT'].astype(float).mean():.1f}%")
         c3.metric("Lambda", "mfg-portops-ocr")
         st.info("Lambda `mfg-portops-ocr` reads each gate-cam frame from `s3://sg-manufacturing-demos-2026/port-ops/gate-cam/`, calls Rekognition `DetectText`, and writes the result to `RAW.OCR_RESULTS`.")
+
+        st.subheader("Latest Gate Camera Capture")
+        img_col, detail_col = st.columns([1, 1])
+        with img_col:
+            from pathlib import Path
+            import os
+            app_dir = Path(__file__).parent
+            img_path = app_dir / "container-001.jpg"
+            if img_path.exists():
+                st.image(str(img_path), caption="Gate-8 camera frame — TCNU 9156324")
+            else:
+                st.image("container-001.jpg", caption="Gate-8 camera frame — TCNU 9156324")
+        with detail_col:
+            st.markdown("**Detected Text:** `TCNU 9156324`")
+            st.markdown("**Size/Type Code:** `45G1` — 40FT HIGH CUBE")
+            st.markdown("**Max Gross:** 30,480 KGS / 67,200 LBS")
+            st.markdown("**Tare:** 3,840 KGS / 8,470 LBS")
+            st.markdown("**Payload:** 26,640 KGS / 58,730 LBS")
+            st.markdown("**Manufacturer:** CIMC")
+            st.markdown("**Confidence:** 98.7%")
+            st.markdown("**Gate:** GATE-8")
+            st.markdown("**Processing:** < 2 sec (Lambda → Rekognition → Snowflake)")
+
+        st.subheader("OCR Results Log")
         st.dataframe(ocr.reset_index(drop=True), use_container_width=True)
     except Exception as e:
         st.error(f"OCR error: {e}")
