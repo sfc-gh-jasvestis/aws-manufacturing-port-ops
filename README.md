@@ -1,4 +1,4 @@
-# Port Operations & Vessel Tracking
+# Manufacturing Port Operations & Vessel Tracking
 
 Real-time port operations intelligence powered by Snowflake Cortex AI — optimize berth allocation, reduce vessel wait times, and prevent terminal congestion.
 
