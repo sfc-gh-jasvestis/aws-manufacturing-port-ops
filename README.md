@@ -97,9 +97,9 @@ Run all SQL scripts including gate event streaming. Deploy the main Streamlit ap
 ## Business Impact
 
 Industry research and Snowflake customer outcomes:
-- **Port terminal congestion** adds $600-$1200 per container in demurrage -- World Shipping Council
-- **Real-time vessel tracking** reduces port wait times by 25-40% -- McKinsey Maritime
-- **Automated gate operations** improve throughput by 30% -- Port Technology International
+- **Port terminal congestion** adds $600-$1200 per container in demurrage -- [World Shipping Council](https://www.worldshipping.org/news/the-global-container-shipping-industry)
+- **Real-time vessel tracking** reduces port wait times by 25-40% -- [McKinsey Maritime](https://www.mckinsey.com/industries/travel-logistics-and-infrastructure/our-insights)
+- **Automated gate operations** improve throughput by 30% -- [Port Technology International](https://www.porttechnology.org/news/automation-key-to-port-efficiency/)
 - **Penske Logistics** consolidated all supply chain performance data on Snowflake, enabling 5-year trend analysis in 15 minutes -- [snowflake.com/customers/penske](https://www.snowflake.com/en/customers/all-customers/case-study/penske/)
 
 ## Key Demo Numbers
